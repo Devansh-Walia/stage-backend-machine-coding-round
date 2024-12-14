@@ -2,9 +2,12 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Inject,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 
 import { User, UserDocument } from '../models/user.schema';
 import { Movie, MovieDocument } from '../models/movie.schema';
@@ -19,6 +22,7 @@ export class ListService {
     @InjectModel(Movie.name) private readonly movieModel: Model<MovieDocument>,
     @InjectModel(TVShow.name)
     private readonly tvShowModel: Model<TVShowDocument>,
+    @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
   ) {}
 
   private async findUserById(userId: string): Promise<UserDocument> {
@@ -36,6 +40,10 @@ export class ListService {
     model: Model<MovieDocument | TVShowDocument>,
   ): Promise<MovieDocument | TVShowDocument | null> {
     return model.findById(new Types.ObjectId(contentId)).lean();
+  }
+
+  private getCacheKey(userId: string, offset: number, limit: number): string {
+    return `list:${userId}:${offset}:${limit}`;
   }
 
   async addToList(userId: string, addToListDto: AddToListDto) {
@@ -73,6 +81,10 @@ export class ListService {
       { new: true },
     );
 
+    // Invalidate cache for this user's list
+    const cacheKeys = await this.cacheManager.store.keys(`list:${userId}:*`);
+    await Promise.all(cacheKeys.map((key) => this.cacheManager.del(key)));
+
     return { message: 'Content added to list successfully' };
   }
 
@@ -88,13 +100,24 @@ export class ListService {
       throw new NotFoundException('Content not found in list');
     }
 
+    // Invalidate cache for this user's list
+    const cacheKeys = await this.cacheManager.store.keys(`list:${userId}:*`);
+    await Promise.all(cacheKeys.map((key) => this.cacheManager.del(key)));
+
     return { message: 'Content removed from list successfully' };
   }
 
   async listMyItems(userId: string, query: ListQueryDto) {
-    const user = await this.findUserById(userId);
-
     const { limit = 10, offset = 0 } = query;
+    const cacheKey = this.getCacheKey(userId, offset, limit);
+
+    // Try to get from cache first
+    const cachedList = await this.cacheManager.get(cacheKey);
+    if (cachedList) {
+      return cachedList;
+    }
+
+    const user = await this.findUserById(userId);
     const totalItems = user.myList.length;
     const paginatedItems = user.myList.slice(offset, offset + limit);
 
@@ -125,7 +148,7 @@ export class ListService {
       }),
     );
 
-    return {
+    const result = {
       items: contentDetails.filter((item) => !item.error),
       removedItems: contentDetails.filter((item) => item.error),
       pagination: {
@@ -135,5 +158,10 @@ export class ListService {
         remaining: Math.max(0, totalItems - (offset + limit)),
       },
     };
+
+    // Cache the result
+    await this.cacheManager.set(cacheKey, result);
+
+    return result;
   }
 }

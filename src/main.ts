@@ -1,35 +1,36 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import 'reflect-metadata';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors({
-    origin: '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: '*',
-    credentials: true,
-  });
+  // Enable validation
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  // Swagger setup
   const config = new DocumentBuilder()
-    .setTitle('Stage Api docs')
-    .setDescription(
-      'Have all the routes documentation for user, movies and tvshows',
-    )
+    .setTitle('OTT Platform API')
+    .setDescription('API documentation for OTT Platform My List feature')
     .setVersion('1.0')
-    .addServer('http://127.0.0.1:3000', 'Default Server')
+    .addTag('My List', "Operations for managing user's content list")
+    .addTag('Movies', 'Operations for managing movies')
+    .addTag('TV Shows', 'Operations for managing TV shows')
     .build();
+
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document);
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
-      whitelist: true,
-    }),
-  );
+  // Enable CORS
+  app.enableCors();
+
   await app.listen(3000);
 }
 bootstrap();
