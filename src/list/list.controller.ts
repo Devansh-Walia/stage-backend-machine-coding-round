@@ -9,14 +9,14 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
-import { UserService } from './list.servce';
+import { ListService } from './list.service';
 import { AddToListDto } from './dto/add-to-list.dto';
 import { ListQueryDto } from './dto/list-query.dto';
 
 @ApiTags('My List')
 @Controller('list')
 export class ListController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly listService: ListService) {}
 
   @Post()
   @ApiOperation({ summary: "Add content to user's list" })
@@ -29,7 +29,7 @@ export class ListController {
   async addToList(@Body() addToListDto: AddToListDto) {
     // For demo purposes, using a hardcoded user ID. In a real app, this would come from auth
     const userId = 'demo-user';
-    return this.userService.addToList(userId, addToListDto);
+    return this.listService.addToList(userId, addToListDto);
   }
 
   @Delete(':contentId')
@@ -42,7 +42,7 @@ export class ListController {
   async removeFromList(@Param('contentId') contentId: string) {
     // For demo purposes, using a hardcoded user ID. In a real app, this would come from auth
     const userId = 'demo-user';
-    return this.userService.removeFromList(userId, contentId);
+    return this.listService.removeFromList(userId, contentId);
   }
 
   @Get()
@@ -54,6 +54,6 @@ export class ListController {
   async getList(@Query() query: ListQueryDto) {
     // For demo purposes, using a hardcoded user ID. In a real app, this would come from auth
     const userId = 'demo-user';
-    return this.userService.listMyItems(userId, query);
+    return this.listService.listMyItems(userId, query);
   }
 }
